@@ -1,3 +1,5 @@
+import urlparse
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -12,6 +14,21 @@ from django.views.generic.list_detail import object_list
 
 from relationships.decorators import require_user
 from relationships.models import Relationship, RelationshipStatus
+
+def _validate_next_parameter(request, next):
+    parsed = urlparse.urlparse(next)
+    if parsed and parsed.path:
+        return parsed.path
+    return None
+
+def _get_next(request):
+    next = request.POST.get('next', request.GET.get('next',
+        request.META.get('HTTP_REFERER', None)))
+    if next:
+        next = _validate_next_parameter(request, next)
+    if not next:
+        next = request.path
+    return next
 
 @login_required
 def relationship_redirect(request):
@@ -72,8 +89,9 @@ def relationship_handler(request, user, status_slug, add=True,
         if request.is_ajax():
             response = {'result': '1'}
             return HttpResponse(json.dumps(response), mimetype="application/json")
-        if request.GET.get('next'):
-            return HttpResponseRedirect(request.GET['next'])
+        next = _get_next(request)
+        if next:
+            return HttpResponseRedirect(next)
         template_name = success_template_name
     return render_to_response(template_name, 
         {'to_user': user, 'status': status, 'add': add},
